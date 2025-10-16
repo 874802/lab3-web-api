@@ -99,7 +99,7 @@ class ControllerTests {
         every { employeeRepository.findById(1) } answers {
             Optional.of(Employee("Mary", "Manager", 1))
         }
-        
+
         // Mock repository to return empty for id = 2
         // Simulates a 404 case for non-existent employee
         every { employeeRepository.findById(2) } answers {
@@ -148,7 +148,7 @@ class ControllerTests {
         } andThenAnswer {
             Optional.of(Employee("Tom", "Manager", 1))
         }
-        
+
         // Mock save to return employee with specified ID
         // PUT should always use the same ID from the URL
         every { employeeRepository.save(any()) } answers {
@@ -196,7 +196,7 @@ class ControllerTests {
         // Allow deleteById method to be called
         // DELETE should succeed regardless of whether the resource exists
         justRun { employeeRepository.deleteById(1) }
-        
+
         mvc.delete("/employees/1").andExpect {
             status { isNoContent() }
         }
