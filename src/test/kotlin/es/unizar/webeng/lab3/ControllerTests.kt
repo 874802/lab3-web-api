@@ -1,6 +1,9 @@
 package es.unizar.webeng.lab3
 
 import com.ninjasquad.springmockk.MockkBean
+import io.mockk.every
+import io.mockk.justRun
+import io.mockk.verify
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
@@ -12,6 +15,7 @@ import org.springframework.test.web.servlet.delete
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.put
+import java.util.Optional
 
 private val MANAGER_REQUEST_BODY = { name: String ->
     """
@@ -43,11 +47,15 @@ class ControllerTests {
 
     @Test
     fun `POST is not safe and not idempotent`() {
-        // SETUP - COMPLETE ME!
-        // Hint: POST is not idempotent - each call creates a new resource.
-        // Think about what the controller does when saving an employee.
-        // Consider how to mock the repository to return different results for multiple calls.
-        TODO("Complete the mock setup for POST test")
+        // SETUP
+        // Mock save to return different IDs on multiple calls
+        // This demonstrates non-idempotency: each POST creates a new resource with a unique ID
+        // Also demonstrates non-safety: each POST change the database
+        every { employeeRepository.save(any()) } answers {
+            Employee("Mary", "Manager", 1)
+        } andThenAnswer {
+            Employee("Mary", "Manager", 2)
+        }
 
         mvc
             .post("/employees") {
@@ -77,19 +85,26 @@ class ControllerTests {
                 }
             }
 
-        // VERIFY - COMPLETE ME!
-        // Hint: What repository methods should be called for a POST operation?
-        // What methods should NOT be called? Think about the difference between safe and unsafe operations.
-        TODO("Complete the verification for POST test")
+        // VERIFY
+        // POST is not safe: it modifies state by calling save
+        // POST is not idempotent: calling it twice creates two different resources
+        verify(exactly = 2) { employeeRepository.save(any()) }
     }
 
     @Test
     fun `GET is safe and idempotent`() {
         // SETUP
-        // Hint: GET is safe and idempotent - it only reads data without side effects.
-        // Look at the test expectations to understand what scenarios you need to mock.
-        // Consider both successful and unsuccessful retrieval cases.
-        TODO("Complete the mock setup for GET test")
+        // Mock repository to return an employee with id = 1
+        // GET should always return the same result without modifying state
+        every { employeeRepository.findById(1) } answers {
+            Optional.of(Employee("Mary", "Manager", 1))
+        }
+        
+        // Mock repository to return empty for id = 2
+        // Simulates a 404 case for non-existent employee
+        every { employeeRepository.findById(2) } answers {
+            Optional.empty()
+        }
 
         mvc.get("/employees/1").andExpect {
             status { isOk() }
@@ -111,19 +126,34 @@ class ControllerTests {
             status { isNotFound() }
         }
 
-        // VERIFY - COMPLETE ME!
-        // Hint: Since GET is safe, what repository methods should NOT be called?
-        // Count how many times each method was called based on the test requests.
-        TODO("Complete the verification for GET test")
+        // VERIFY
+        // GET is safe: no modification methods (save, deleteById) should be called
+        // GET is idempotent: calling it multiple times has the same effect
+        verify(exactly = 2) { employeeRepository.findById(1) }
+        verify(exactly = 1) { employeeRepository.findById(2) }
+        verify(exactly = 0) {
+            employeeRepository.save(any())
+            employeeRepository.deleteById(any())
+            employeeRepository.findAll()
+        }
     }
 
     @Test
     fun `PUT is idempotent but not safe`() {
         // SETUP
-        // Hint: PUT is idempotent but not safe - it modifies state but repeated calls have the same effect.
-        // Study the controller logic to understand what it does when an employee exists vs. doesn't exist.
-        // Consider how to mock the repository to simulate both scenarios.
-        TODO("Complete the mock setup for PUT test")
+        // Mock repository to return empty first (employee doesn't exist), then employee (after creation)
+        // This demonstrates PUT's idempotency: first call creates, second call updates with same result
+        every { employeeRepository.findById(1) } answers {
+            Optional.empty()
+        } andThenAnswer {
+            Optional.of(Employee("Tom", "Manager", 1))
+        }
+        
+        // Mock save to return employee with specified ID
+        // PUT should always use the same ID from the URL
+        every { employeeRepository.save(any()) } answers {
+            Employee("Tom", "Manager", 1)
+        }
 
         mvc
             .put("/employees/1") {
@@ -153,19 +183,20 @@ class ControllerTests {
                 }
             }
 
-        // VERIFY - COMPLETE ME!
-        // Hint: What repository methods should be called for PUT operations?
-        // Think about the controller logic and how many times each method should be invoked.
-        TODO("Complete the verification for PUT test")
+        // VERIFY
+        // PUT is not safe: it modifies state by calling save
+        // PUT is idempotent: calling it twice with same data results in same final state
+        verify(exactly = 2) { employeeRepository.findById(1) }
+        verify(exactly = 2) { employeeRepository.save(any()) }
     }
 
     @Test
     fun `DELETE is idempotent but not safe`() {
         // SETUP
-        // Hint: DELETE is idempotent but not safe - it modifies state but repeated calls have the same effect.
-        // Look at the controller implementation to see what repository method it calls.
-        // Consider how to mock a method that doesn't return a value.
-        TODO("Complete the mock setup for DELETE test")
+        // Allow deleteById method to be called
+        // DELETE should succeed regardless of whether the resource exists
+        justRun { employeeRepository.deleteById(1) }
+        
         mvc.delete("/employees/1").andExpect {
             status { isNoContent() }
         }
@@ -175,8 +206,13 @@ class ControllerTests {
         }
 
         // VERIFY
-        // Hint: What repository methods should be called for DELETE operations?
-        // What methods should NOT be called? Think about the nature of DELETE operations.
-        TODO("Complete the verification for DELETE test")
+        // DELETE is not safe: it modifies state by calling deleteById
+        // DELETE is idempotent: calling it multiple times has the same effect (resource is gone)
+        verify(exactly = 2) { employeeRepository.deleteById(1) }
+        verify(exactly = 0) {
+            employeeRepository.save(any())
+            employeeRepository.findById(any())
+            employeeRepository.findAll()
+        }
     }
 }
