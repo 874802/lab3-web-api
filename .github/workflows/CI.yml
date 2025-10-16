@@ -18,5 +18,6 @@ jobs:
           distribution: 'temurin'
       - name: Validate Gradle wrapper
         uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
+        uses: gradle/actions/wrapper-validation-action@v3
       - name: Build and Test with Gradle
         run: ./gradlew build --no-daemon
